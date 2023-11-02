@@ -1,15 +1,17 @@
 const express = require("express");
 const app = express();
 const PORT = 8080;
+const cookieParser = require('cookie-parser')
 
+//middlewear used
 app.set("view engine", "ejs");
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser())
 
 function generateRandomString() {
   const result = Math.random().toString(36).substring(7);
   return result
 }
-
 
 const urlDatabase = {
   "b2xVn2": "http://www.lighthouselabs.ca",
@@ -26,12 +28,19 @@ app.get("/urls.json", (req, res) => {
 });
 
 app.get("/urls", (req, res) => {
-  const templateVars = { urls: urlDatabase };
+  const templateVars = { 
+    urls: urlDatabase,
+    username: req.cookies["username"]
+   };
   res.render("urls_index", templateVars);
 });
 
 app.get("/urls/new", (req, res) => {
-  res.render("urls_new");
+  const templateVars = { 
+    urls: urlDatabase,
+    username: req.cookies["username"]
+   };
+  res.render("urls_new", templateVars);
 });
 
 /*
@@ -39,7 +48,7 @@ this get format /urls/:id. The : in front of id indicates that id is a route par
 This means that the value in this part of the url will be available in the req.params object.
 */
 app.get("/urls/:id", (req, res) => {
-  const templateVars = { id: req.params.id, longURL: urlDatabase[req.params.id]};
+  const templateVars = { id: req.params.id, longURL: urlDatabase[req.params.id], username: req.cookies["username"]};
   res.render("urls_show", templateVars);
 });
 
@@ -65,7 +74,7 @@ app.post("/urls/:id/delete", (req, res) => {
   delete urlDatabase[id]
   res.redirect("/urls");
 });
-
+ 
 app.post("/urls/:id", (req, res) => {
 // take new long URL
 const newlongURL = req.body.longURL
@@ -74,4 +83,25 @@ const id = req.params.id
 urlDatabase[id] = newlongURL
 // redirect back to urls page
 res.redirect("/urls")
+});
+
+// post request for login
+app.post("/login", (req, res) => {
+  console.log(req.body)
+  res.cookie("username", req.body.username)
+  res.redirect("/urls");
+});
+
+//adds username to all pages headers
+app.get("/urls", (req, res) => {
+  const templateVars = {
+    username: req.cookies["username"],
+    // ... any other vars
+  };
+  res.render("urls_index", templateVars);
+});
+
+app.post("/logout", (req, res) => {
+  res.clearCookie("username")
+  res.redirect("/urls")
 });
