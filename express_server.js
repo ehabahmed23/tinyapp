@@ -5,7 +5,10 @@ const PORT = 8080;
 app.set("view engine", "ejs");
 app.use(express.urlencoded({ extended: true }));
 
-function generateRandomString() {}
+function generateRandomString() {
+  const result = Math.random().toString(36).substring(7);
+  return result
+}
 
 
 const urlDatabase = {
@@ -13,9 +16,6 @@ const urlDatabase = {
   "9sm5xK": "http://www.google.com"
 };
 
-app.get("/", (req, res) => {
-  res.send("Hello!");
-});
 
 app.listen(PORT, () => {
   console.log(`Example app listening on port ${PORT}!`);
@@ -23,10 +23,6 @@ app.listen(PORT, () => {
 
 app.get("/urls.json", (req, res) => {
   res.json(urlDatabase);
-});
-
-app.get("/hello", (req, res) => {
-  res.send("<html><body>Hello <b>World</b></body></html>\n");
 });
 
 app.get("/urls", (req, res) => {
@@ -48,6 +44,34 @@ app.get("/urls/:id", (req, res) => {
 });
 
 app.post("/urls", (req, res) => {
+  // get the long url from body
+  const longURl = req.body.longURL
+  // add it to database with short url
+  const shortURL = generateRandomString()
+  urlDatabase[shortURL] = longURl;
+  // redirect to new urlpage
   console.log(req.body); // Log the POST request body to the console
-  res.send("Ok"); // Respond with 'Ok' (we will replace this)
+  res.redirect(`/urls/${shortURL}`); // Respond with 'Ok' (we will replace this)
+});
+
+app.get("/u/:id", (req, res) => {
+  const longURL = urlDatabase[req.params.id];
+  res.redirect(longURL);
+});
+
+app.post("/urls/:id/delete", (req, res) => {
+  id = req.params.id
+  console.log(urlDatabase[id])
+  delete urlDatabase[id]
+  res.redirect("/urls");
+});
+
+app.post("/urls/:id", (req, res) => {
+// take new long URL
+const newlongURL = req.body.longURL
+const id = req.params.id
+// reassign it to this shorturl 
+urlDatabase[id] = newlongURL
+// redirect back to urls page
+res.redirect("/urls")
 });
