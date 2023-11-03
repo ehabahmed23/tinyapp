@@ -1,6 +1,6 @@
 const express = require("express");
 const app = express();
-const PORT = 8000;
+const PORT = 8080;
 const cookieParser = require('cookie-parser')
 
 // lsof -i :8000 -t 
@@ -127,26 +127,12 @@ urlDatabase[id] = newlongURL // reassign it to this shortURL
 res.redirect("/urls");
 });
 
-// post request for login
-app.post("/login", (req, res) => {
-  console.log(req.body)
-  res.cookie("user_id", req.body.username)
-  res.redirect("/urls");
-});
-
 //adds username to all pages headers
 app.get("/urls", (req, res) => {
   const userId = req.cookies.user_id;
   const user = users[userId];
 
   res.render("urls_index", { user });
-});
-
-// clears cookie when you logout
-app.post("/logout", (req, res) => {
-
-  res.clearCookie("user_id")
-  res.redirect("/urls")
 });
 
 //------------------------------------Registration page--------------------------------
@@ -198,4 +184,28 @@ app.get("/login", (req, res) => {
   const user = users[userId];
 
   res.render("login", { user });
+});
+
+app.post("/login", (req, res) => {
+  const email = req.body.email //grab email from body
+  const password = req.body.password // grab password
+
+  const user = findUserByEmail(email, users); // check if user is in users db
+  if (user && user.password === password) { // if user does exist and password matches
+
+    //we want broswer to store the user id in a cookie
+    res.cookie("user_id", user.id) //set cookie to their user id 
+    res.redirect("/urls");
+    return;
+  };
+
+  //user is not authenticated
+  res.status(403).send("Could not find an account associated with that email. Please register and create an account.")
+});
+
+// clears cookie when you logout
+app.post("/logout", (req, res) => {
+
+  res.clearCookie("user_id")
+  res.redirect("/login")
 });
