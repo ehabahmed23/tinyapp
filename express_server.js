@@ -29,10 +29,26 @@ const findUserByEmail = (email, users) => {
     return false;
 };
 
+function urlsForUser(id, database) {
+  let result = {};
+  for (const url in database) {
+    if (id === database[url].userID) {
+      result[url] = database[url]
+    }
+  }
+  return result;
+}
+
 // database for urls and users
 const urlDatabase = {
-  "b2xVn2": "http://www.lighthouselabs.ca",
-  "9sm5xK": "http://www.google.com"
+  b6UTxQ: {
+    longURL: "https://www.tsn.ca",
+    userID: "aJ48lW",
+  },
+  i3BoGr: {
+    longURL: "https://www.google.ca",
+    userID: "aJ48lW",
+  },
 };
 
 const users = {
@@ -62,22 +78,35 @@ app.get("/urls.json", (req, res) => {
 
 // routes all my urls page
 app.get("/urls", (req, res) => {
-  const userId = req.cookies.user_id;
-  const user = users[userId];
+  const user_id = req.cookies.user_id;
+  const user = users[user_id];
 
-  const templateVars = { 
-    urls: urlDatabase,
-    user
-   };
-  res.render("urls_index", templateVars);
+   if (user_id) {
+    let urlList = urlsForUser(user_id, urlDatabase)
+    if (Object.keys(urlList).length !== 0) {
+      const templateVars = { 
+        urls: urlList,
+        user
+       };
+      res.render("urls_index", templateVars);
+    } else {
+      res.send("<html><body><b>No URLs to display. <a href='/urls/new'>click here to make one!</a></b></body></html>\n");
+    }
+  } else {
+    res.send("<html><body><b>You must be logged in to see urls</b></body></html>\n");
+  }
 });
 
 // route for adding new urls page
 app.get("/urls/new", (req, res) => {
-  const userId = req.cookies.user_id;
-  const user = users[userId];
+  const user_id = req.cookies.user_id;
+  const user = users[user_id];
 
-  res.render("urls_new", {user});
+   if (!user_id) {    //if we do not have a user logged in, then redirect them to the login page
+    return res.redirect("/login");
+  } else {
+    res.render("urls_new", { user });
+  }
 });
 
 // this get format /urls/:id. The : in front of id indicates that id is a route parameter. 
@@ -86,62 +115,119 @@ app.get("/urls/:id", (req, res) => {
   const userId = req.cookies.user_id;
   const user = users[userId];
   const id = req.params.id
-  const longURL = urlDatabase[id]
+  const longURL = urlDatabase[id].longURL
   
-  const templateVars = { id, longURL, user};
-  res.render("urls_show", templateVars);
+  if (userId) {
+    let urlList = urlsForUser(userId, urlDatabase)
+    if (urlList.hasOwnProperty(id)) { //if short URL is assigned to valid longURl, redirects to page
+      const templateVars = { id, longURL, user};
+      res.render("urls_show", templateVars);
+    } else {
+      res.send("<html><body><b>TinyURL doesn't match your UserID</b></body></html>\n");
+    }
+  } else {
+    res.send("<html><body><b>You must be logged in to see urls</b></body></html>\n");
+  }
+
 });
 
 // post request for adding a new url and sendin you to that page after
 app.post("/urls", (req, res) => {
-  const longURl = req.body.longURL  // get the long url from body
-  const shortURL = generateRandomString()  // add it to database with short url
+  const user_id = req.cookies.user_id;
+  const longURL = req.body.longURL
 
-  urlDatabase[shortURL] = longURl;
+  if (user_id) {
+    const newShortURL = generateRandomString(); 
+    const newLongURL = {
+      longURL: longURL,
+      userID: user_id
+    }; 
+    
+    //need to add the user to the database as well so it's linked to the newURL
+    urlDatabase[newShortURL] = newLongURL;  //this gives random string id to the new long URL that client provided
+  
+    res.redirect(`/urls/${newShortURL}`);//will redirect to the longURL page of that randomstring
+ 
 
-  console.log(req.body); // Log the POST request body to the console
-  res.redirect(`/urls/${shortURL}`);   // redirect to new urlpage
+  } else {   // a non-logged in user cannot add a new url
+    res.status(403).send("Sorry but you cannot access this page if you are not logged. Please log in or register for an account");
+  }
 });
 
 // this will send you to the actual website attached to the shorturl
 app.get("/u/:id", (req, res) => {
-  const longURL = urlDatabase[req.params.id];
+//check to see if URL exists
+console.log(!urlDatabase["th"]);
+if (urlDatabase.hasOwnProperty(req.params.id)) { //if short URL is assigned to valid longURl, redirects to page
+  const longURL = urlDatabase[req.params.id].longURL;
   res.redirect(longURL);
+} else {
+  return res.status(404).send('<html>This short url does not exist!</a></html>');
+}
+
 });
 
 // checks the short url you want to delete and goes into database and deletes it and send you back to urls page
 app.post("/urls/:id/delete", (req, res) => {
  const id = req.params.id
-  console.log(urlDatabase[id])
-  delete urlDatabase[id]
-  res.redirect("/urls");
+ const user_id = req.cookies.user_id;
+
+ console.log(user_id)
+
+ if (urlDatabase.hasOwnProperty(id))  {
+  if (user_id) {
+    let urlList = urlsForUser(user_id, urlDatabase)
+    if (urlList.hasOwnProperty(id)) {
+      delete urlDatabase[id];
+      res.redirect("/urls");
+    } else {
+      return res.status(404).send('<html>This user does not own this url!</a></html>');
+    }
+  } else {
+    return res.status(404).send('<html>User is not logged in!</a></html>');
+  }
+} else {
+  return res.status(404).send('<html>This id does not exist!</a></html>');
+}
+
 });
 
 // takes the new long url inputed and the current short url and replaces that in the database
 app.post("/urls/:id", (req, res) => {
 const newlongURL = req.body.longURL // the new long URL you inputed
 const id = req.params.id // this is the id stored in the URL
+const user_id = req.cookies.user_id;
 
-urlDatabase[id] = newlongURL // reassign it to this shortURL
-// redirect back to urls page
-res.redirect("/urls");
-});
+if (urlDatabase.hasOwnProperty(id))  {
+  if (user_id) {
+    let urlList = urlsForUser(user_id, urlDatabase)
+    if (urlList.hasOwnProperty(id)) {
+      urlDatabase[id].longURL = newlongURL
+      res.redirect("/urls");
+    } else {
+      return res.status(404).send('<html>This user does not own this url!</a></html>');
+    }
+  } else {
+    return res.status(404).send('<html>User is not logged in!</a></html>');
+  }
+} else {
+  return res.status(404).send('<html>This id does not exist!</a></html>');
+}
 
-//adds username to all pages headers
-app.get("/urls", (req, res) => {
-  const userId = req.cookies.user_id;
-  const user = users[userId];
-
-  res.render("urls_index", { user });
 });
 
 //------------------------------------Registration page--------------------------------
 app.get("/register", (req, res) => {
+  const user_id = req.cookies.user_id;
   const templateVars = {
     user: null //since we haven't logged in yet here, user would be null here
   };
-  res.render("register", templateVars);
-  res.status(404);
+   if (!user_id) {    // if a user is not logged in, it should take them to registeration page
+    res.render("register", templateVars); // render registration page
+  
+  } else {     //if logged in, they should see the url page 
+    res.redirect("/urls");
+  }
 });
 
 app.post("/register", (req, res) => { //when I submit register form I want the info to be receive that info from
@@ -180,11 +266,18 @@ app.post("/register", (req, res) => { //when I submit register form I want the i
 
 //---------------------Login--------------------------
 app.get("/login", (req, res) => {
-  const userId = req.cookies.user_id;
-  const user = users[userId];
+  const user_id = req.cookies.user_id;
+  const user = users[user_id];
 
-  res.render("login", { user });
+  if (!user_id) {   // if a user is not logged in, it should take them to login page
+
+    res.render("login", {user}); // render registration page
+  
+  } else {     //if logged in, they should see the url page 
+    res.redirect("/urls");
+  }
 });
+
 
 app.post("/login", (req, res) => {
   const email = req.body.email //grab email from body
