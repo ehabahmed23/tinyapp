@@ -1,7 +1,14 @@
 const express = require("express");
 const app = express();
 const PORT = 8080;
-const cookieParser = require('cookie-parser')
+const cookieSession = require('cookie-session')
+const bcrypt = require("bcryptjs");
+const salt = bcrypt.genSaltSync(10);
+const {
+  generateRandomString,
+  findUserByEmail,
+  urlsForUser
+} = require('./helpers');
 
 // lsof -i :8000 -t 
 // kill number
@@ -10,34 +17,40 @@ app.set("view engine", "ejs");
 
 //middlewear used
 app.use(express.urlencoded({ extended: true })); // creates req.body to read
-app.use(cookieParser()) // creates req.cookies
+app.use(cookieSession({
+  name: 'session',
+  keys: ['key1'],
+
+  // Cookie Options
+  maxAge: 24 * 60 * 60 * 1000 // 24 hours
+}))
 
 // helper functions
-function generateRandomString() {
-  const result = Math.random().toString(36).substring(7);
-  return result
-};
+// function generateRandomString() {
+//   const result = Math.random().toString(36).substring(7);
+//   return result
+// };
 
-const findUserByEmail = (email, users) => {
-  // for (let key in database)
-    for (let id in users) {
-      const user = users[id]; // => retrieve the value that's in id 
-      if (user.email === email) {
-        return user;
-      }
-    }
-    return false;
-};
+// const findUserByEmail = (email, users) => {
+//   // for (let key in database)
+//     for (let id in users) {
+//       const user = users[id]; // => retrieve the value that's in id 
+//       if (user.email === email) {
+//         return user;
+//       }
+//     }
+//     return false;
+// };
 
-function urlsForUser(id, database) {
-  let result = {};
-  for (const url in database) {
-    if (id === database[url].userID) {
-      result[url] = database[url]
-    }
-  }
-  return result;
-}
+// function urlsForUser(id, database) {
+//   let result = {};
+//   for (const url in database) {
+//     if (id === database[url].userID) {
+//       result[url] = database[url]
+//     }
+//   }
+//   return result;
+// };
 
 // database for urls and users
 const urlDatabase = {
@@ -55,12 +68,12 @@ const users = {
   user01: {
     id: "user01",
     email: "a@a.com",
-    password: "hello",
+    password: bcrypt.hashSync("hello", salt),
   },
   user02: {
     id: "user02",
     email: "b@b.com",
-    password: "1234",
+    password: bcrypt.hashSync("1234", salt),
   },
 };
 
@@ -71,6 +84,16 @@ app.listen(PORT, () => {
   console.log(`Example app listening on port ${PORT}!`);
 });
 
+app.get("/", (req, res) => {
+  const user_id = req.session.user_id;
+    
+  if (!user_id) {   
+    return res.redirect("/login"); //if user is not logged in: redirect to /login
+  } else {      
+    res.redirect("/urls"); //if user is logged in: redirect to /urls
+  }
+});
+
 // shows our database as a JSON file
 app.get("/urls.json", (req, res) => {
   res.json(urlDatabase);
@@ -78,7 +101,7 @@ app.get("/urls.json", (req, res) => {
 
 // routes all my urls page
 app.get("/urls", (req, res) => {
-  const user_id = req.cookies.user_id;
+  const user_id = req.session.user_id;
   const user = users[user_id];
 
    if (user_id) {
@@ -99,7 +122,7 @@ app.get("/urls", (req, res) => {
 
 // route for adding new urls page
 app.get("/urls/new", (req, res) => {
-  const user_id = req.cookies.user_id;
+  const user_id = req.session.user_id;
   const user = users[user_id];
 
    if (!user_id) {    //if we do not have a user logged in, then redirect them to the login page
@@ -112,7 +135,7 @@ app.get("/urls/new", (req, res) => {
 // this get format /urls/:id. The : in front of id indicates that id is a route parameter. 
 // This means that the value in this part of the url will be available in the req.params object.
 app.get("/urls/:id", (req, res) => {
-  const userId = req.cookies.user_id;
+  const userId = req.session.user_id;
   const user = users[userId];
   const id = req.params.id
   const longURL = urlDatabase[id].longURL
@@ -133,7 +156,7 @@ app.get("/urls/:id", (req, res) => {
 
 // post request for adding a new url and sendin you to that page after
 app.post("/urls", (req, res) => {
-  const user_id = req.cookies.user_id;
+  const user_id = req.session.user_id;
   const longURL = req.body.longURL
 
   if (user_id) {
@@ -170,7 +193,7 @@ if (urlDatabase.hasOwnProperty(req.params.id)) { //if short URL is assigned to v
 // checks the short url you want to delete and goes into database and deletes it and send you back to urls page
 app.post("/urls/:id/delete", (req, res) => {
  const id = req.params.id
- const user_id = req.cookies.user_id;
+ const user_id = req.session.user_id;
 
  console.log(user_id)
 
@@ -196,7 +219,7 @@ app.post("/urls/:id/delete", (req, res) => {
 app.post("/urls/:id", (req, res) => {
 const newlongURL = req.body.longURL // the new long URL you inputed
 const id = req.params.id // this is the id stored in the URL
-const user_id = req.cookies.user_id;
+const user_id = req.session.user_id;
 
 if (urlDatabase.hasOwnProperty(id))  {
   if (user_id) {
@@ -218,14 +241,14 @@ if (urlDatabase.hasOwnProperty(id))  {
 
 //------------------------------------Registration page--------------------------------
 app.get("/register", (req, res) => {
-  const user_id = req.cookies.user_id;
+  const user_id = req.session.user_id;
   const templateVars = {
     user: null //since we haven't logged in yet here, user would be null here
   };
    if (!user_id) {    // if a user is not logged in, it should take them to registeration page
     res.render("register", templateVars); // render registration page
   
-  } else {     //if logged in, they should see the url page 
+  } else {     //if logged in, they should see the url page ************** check again
     res.redirect("/urls");
   }
 });
@@ -253,20 +276,20 @@ app.post("/register", (req, res) => { //when I submit register form I want the i
   const newUser = { //This endpoint should add a new user object to the global users object
     id: id,
     email: email,
-    password: password
+    password: bcrypt.hashSync(password, salt)
   }
   // add the new user to our users obj database (i.e. we need to ascribe it to a key value and in our case the random generated string)
   users[id] = newUser //we want it to be equal to new user object above 
-  //set the cookie-- we want to the browser keep the user id in the cookie
-  res.cookie("user_id", id); //test cookie in browser
+  console.log(users);  //set the cookie-- we want to the browser keep the user id in the cookie
+  req.session.user_id = id;
+  // res.cookie("user_id", id); //test cookie in browser
   //redirect to '/urls'
-  console.log(users);
   res.redirect("/urls");
 });
 
 //---------------------Login--------------------------
 app.get("/login", (req, res) => {
-  const user_id = req.cookies.user_id;
+  const user_id = req.session.user_id;
   const user = users[user_id];
 
   if (!user_id) {   // if a user is not logged in, it should take them to login page
@@ -282,12 +305,20 @@ app.get("/login", (req, res) => {
 app.post("/login", (req, res) => {
   const email = req.body.email //grab email from body
   const password = req.body.password // grab password
-
   const user = findUserByEmail(email, users); // check if user is in users db
-  if (user && user.password === password) { // if user does exist and password matches
+  
+  if (email === "" || password === "") {
+    return res.status(400).send("Please ensure both fields are filled. Enter both a valid email address and/or password.");
+  }
+
+  if (user && !bcrypt.compareSync(password, user.password)) {
+    res.send("Please type in the correct password associated with this account.");
+  }
+
+  if (user && bcrypt.compareSync(password, user.password)) { // if user does exist and password matches
 
     //we want broswer to store the user id in a cookie
-    res.cookie("user_id", user.id) //set cookie to their user id 
+    req.session.user_id = user.id; //set cookie to their user id 
     res.redirect("/urls");
     return;
   };
@@ -299,6 +330,6 @@ app.post("/login", (req, res) => {
 // clears cookie when you logout
 app.post("/logout", (req, res) => {
 
-  res.clearCookie("user_id")
-  res.redirect("/login")
+req.session.user_id = null;
+  res.redirect("/urls")
 });
