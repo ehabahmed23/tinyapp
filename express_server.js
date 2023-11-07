@@ -106,17 +106,13 @@ app.get("/urls", (req, res) => {
 
    if (user_id) {
     let urlList = urlsForUser(user_id, urlDatabase)
-    if (Object.keys(urlList).length !== 0) {
       const templateVars = { 
         urls: urlList,
         user
        };
       res.render("urls_index", templateVars);
     } else {
-      res.send("<html><body><b>No URLs to display. <a href='/urls/new'>click here to make one!</a></b></body></html>\n");
-    }
-  } else {
-    res.send("<html><body><b>You must be logged in to see urls</b></body></html>\n");
+    res.send("<html><body><b>You must be logged in to see urls. <a href='/login'>click here to login!</a></b></body></html>\n");
   }
 });
 
@@ -330,6 +326,7 @@ app.post("/login", (req, res) => {
 // clears cookie when you logout
 app.post("/logout", (req, res) => {
 
-req.session.user_id = null;
+req.session = null;
+
   res.redirect("/urls")
 });
